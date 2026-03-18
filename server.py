@@ -6,7 +6,7 @@ SERVER_IP = "0.0.0.0"
 PORT = 9000
 BUFFER_SIZE = 65535
 
-lost_once = set()
+lost_once = {}
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((SERVER_IP, PORT))
@@ -57,10 +57,13 @@ while True:
             seq = packet["seq"]
 
             # simulate one-time packet loss
-            if seq not in lost_once:
-                print("Simulating packet loss for chunk", seq)
-                lost_once.add(seq)
-                continue
+            if file_id not in lost_once:
+                    lost_once[file_id] = set()
+
+            if seq not in lost_once[file_id]:
+                 print(f"Simulating packet loss for chunk {seq} (file {file_id})")
+                 lost_once[file_id].add(seq)
+                 continue
 
             chunk_data = base64.b64decode(packet["data"])
 
@@ -84,7 +87,7 @@ while True:
                 for i in range(files[file_id]["total"]):
                     output += files[file_id]["chunks"][i]
 
-                with open("received_test.txt", "wb") as f:
+                with open(f"received_{file_id}.txt", "wb") as f:
                     f.write(output)
 
                 print("File reconstructed!")
