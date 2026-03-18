@@ -1,10 +1,11 @@
 import socket
 import json
 import base64
+import time
 
 CHUNK_SIZE = 1024
 WINDOW_SIZE = 4
-SERVER_IP = "127.0.0.1"
+SERVER_IP = "10.30.202.2"   # <-- CHANGE THIS if needed
 SERVER_PORT = 9000
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -17,10 +18,8 @@ def split_file(filename):
     with open(filename, "rb") as f:
         while True:
             data = f.read(CHUNK_SIZE)
-
             if not data:
                 break
-
             chunks.append(data)
 
     return chunks
@@ -35,7 +34,7 @@ if __name__ == "__main__":
 
     print("Total chunks:", total_chunks)
 
-    file_id = "file1"
+    file_id = input("Enter file_id (unique for each client): ")
 
     # ---------------- INIT ----------------
     init_packet = {
@@ -53,6 +52,7 @@ if __name__ == "__main__":
 
             if msg["type"] == "ACK" and msg["seq"] == -1:
                 print("INIT ACK received")
+                time.sleep(0.5)  # important fix
                 break
 
         except socket.timeout:
@@ -65,18 +65,25 @@ if __name__ == "__main__":
         "file_id": file_id
     }
 
+    print("Sending RESUME request...")
     sock.sendto(json.dumps(resume_packet).encode(), (SERVER_IP, SERVER_PORT))
 
     while True:
-        data, _ = sock.recvfrom(65535)
-        resp = json.loads(data.decode())
+        try:
+            data, _ = sock.recvfrom(65535)
+            resp = json.loads(data.decode())
 
-        if resp["type"] == "RESUME_RESP":
-            received_chunks = set(resp["received"])
-            break
+            if resp["type"] == "RESUME_RESP":
+                received_chunks = set(resp["received"])
+                break
+
+        except socket.timeout:
+            print("Retrying RESUME...")
+            sock.sendto(json.dumps(resume_packet).encode(), (SERVER_IP, SERVER_PORT))
 
     print("Server already has:", received_chunks)
 
+    # ---------------- DATA ----------------
     base = 0
 
     while base < total_chunks:
@@ -104,24 +111,18 @@ if __name__ == "__main__":
             }
 
             print("Sending chunk", seq)
-
             sock.sendto(json.dumps(packet).encode(), (SERVER_IP, SERVER_PORT))
-
             sent_chunks.add(seq)
 
         try:
             while len(acked_chunks) < len(sent_chunks):
 
                 ack_data, _ = sock.recvfrom(65535)
-
                 ack = json.loads(ack_data.decode())
 
                 if ack["type"] == "ACK":
-
                     seq = ack["seq"]
-
                     print("ACK received for", seq)
-
                     acked_chunks.add(seq)
 
         except socket.timeout:
@@ -130,11 +131,9 @@ if __name__ == "__main__":
         missing = sent_chunks - acked_chunks
 
         if missing:
-
             print("Missing chunks:", missing)
 
             for seq in missing:
-
                 chunk = chunks[seq]
 
                 packet = {
@@ -146,7 +145,6 @@ if __name__ == "__main__":
                 }
 
                 print("Retransmitting chunk", seq)
-
                 sock.sendto(json.dumps(packet).encode(), (SERVER_IP, SERVER_PORT))
 
         else:
