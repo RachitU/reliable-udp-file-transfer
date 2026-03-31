@@ -1,7 +1,7 @@
 import socket
 import json
 import base64
-
+import hashlib
 SERVER_IP = "0.0.0.0"
 PORT = 9000
 BUFFER_SIZE = 65535
