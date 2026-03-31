@@ -2,6 +2,7 @@ import socket
 import json
 import base64
 import time
+import hashlib
 
 CHUNK_SIZE = 1024
 WINDOW_SIZE = 4
